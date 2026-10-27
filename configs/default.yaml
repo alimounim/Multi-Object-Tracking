@@ -1,0 +1,22 @@
+detector:
+  weights: models/yolo26n.pt   # downloaded automatically on first run
+  conf: 0.1                    # low so ByteTrack's second (low-score) association gets boxes
+  iou: 0.7
+  imgsz: 1280                  # VisDrone frames are ~1344x756 with small objects
+  classes: null                # e.g. [0] for persons only
+  coco_classes: true           # map COCO class ids to VisDrone categories (stock weights)
+  device: 0                    # GPU index, or "cpu"
+
+dataset:
+  split: data/raw/VisDrone/VisDrone2019-MOT-val
+
+tracker:
+  type: bytetrack.yaml         # or botsort.yaml
+
+input:
+  source: 0                    # webcam index, video path, or image folder
+
+output:
+  dir: outputs
+  save_video: true
+  show: false

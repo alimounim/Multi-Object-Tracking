@@ -1,0 +1,28 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+.pytest_cache/
+.ipynb_checkpoints/
+
+# Data, weights, outputs (keep folder placeholders)
+data/**
+!data/**/
+!data/**/.gitkeep
+models/*
+!models/.gitkeep
+outputs/*
+!outputs/.gitkeep
+runs/
+*.pt
+*.onnx
+*.engine
+*.mp4
+*.avi
+
+# IDE / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db

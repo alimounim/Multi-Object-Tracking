@@ -1,0 +1,27 @@
+# PyTorch with CUDA: install first from the PyTorch index
+#   pip install torch torchvision --index-url https://download.pytorch.org/whl/cu130
+torch
+torchvision
+
+# Detection + built-in trackers (ByteTrack, BoT-SORT)
+ultralytics
+lap
+
+# Vision / numerics
+opencv-python
+numpy
+scipy
+filterpy
+
+# MOT evaluation (HOTA, MOTA, IDF1)
+motmetrics
+
+# Utilities
+pyyaml
+tqdm
+matplotlib
+pandas
+
+# Dev
+pytest
+ipykernel
