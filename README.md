@@ -33,18 +33,21 @@ python scripts/evaluate.py --gt data/raw/VisDrone/VisDrone2019-MOT-val/annotatio
 ```
 
 Evaluation follows the official protocol: per class (pedestrian, car, van, truck, bus), IoU ≥ 0.5,
-boxes inside ignored regions dropped, `mean` row = class average.
+boxes inside ignored regions dropped, `mean` row = class average. HOTA is computed with a
+re-implementation of the TrackEval algorithm (`src/mot/eval/hota.py`).
 
-### Baseline (val, YOLO26n COCO weights, imgsz 1280, ByteTrack)
+`run_sequences.py` also writes `speed.json`: per-frame time for detection (pre/inference/post),
+tracker update, and end-to-end wall clock including image loading (first 10 frames of each sequence excluded).
 
-| class | MOTA | IDF1 | IDsw |
-|---|---|---|---|
-| pedestrian | 10.9 | 35.6 | 324 |
-| car | 21.5 | 44.3 | 214 |
-| van | 0.0 | 0.0 | 0 |
-| truck | -38.3 | 25.9 | 9 |
-| bus | -25.0 | 0.0 | 0 |
-| **mean** | **-6.2** | **21.2** | 547 |
+### Baseline (YOLO26n COCO weights, imgsz 1280, ByteTrack, RTX 4060 Ti)
+
+| split | HOTA | MOTA | IDF1 | IDsw | FPS (end-to-end) | FPS (detect+track) |
+|---|---|---|---|---|---|---|
+| val | 19.1 | -6.2 | 21.2 | 547 | 51.9 | 63.9 |
+| test-dev | 26.4 | -0.1 | 31.8 | 1852 | 55.3 | 66.1 |
+
+Per-class test-dev (HOTA / MOTA / IDF1): pedestrian 27.8 / 19.9 / 33.7, car 44.7 / 39.9 / 55.0,
+van 0 / 0 / 0 (no COCO class), truck 27.2 / 1.9 / 30.0, bus 32.2 / -62.4 / 40.2.
 
 ## Layout
 

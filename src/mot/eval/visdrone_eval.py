@@ -1,8 +1,8 @@
-"""CLEAR-MOT / identity metrics for VisDrone2019-MOT, following the official protocol:
+"""CLEAR-MOT, identity and HOTA metrics for VisDrone2019-MOT, following the official protocol:
 
 - per class over EVAL_CLASSES, then averaged across classes
 - boxes (GT and predictions) mostly inside ignored regions (category 0) are discarded before matching
-- a match needs IoU >= 0.5
+- a CLEAR-MOT / identity match needs IoU >= 0.5 (HOTA averages over IoU thresholds 0.05..0.95)
 """
 from pathlib import Path
 
@@ -11,11 +11,13 @@ import numpy as np
 import pandas as pd
 
 from mot.datasets.visdrone import CATEGORIES, EVAL_CLASSES, IGNORED, load_annotations
+from mot.eval import hota
 
 METRICS = [
     "mota", "idf1", "idp", "idr", "precision", "recall",
     "num_switches", "num_false_positives", "num_misses", "mostly_tracked", "mostly_lost",
 ]
+HOTA_METRICS = ["hota", "deta", "assa", "loca"]
 
 
 def intersection(a, b):
@@ -26,14 +28,13 @@ def intersection(a, b):
     return iw * ih
 
 
-def iou_distance(gt, pred, iou_thr):
-    """1 - IoU, with NaN where IoU < iou_thr (motmetrics' iou_matrix breaks on NumPy 2)."""
+def iou(gt, pred):
+    """Pairwise IoU of xywh boxes (motmetrics' iou_matrix breaks on NumPy 2)."""
     if len(gt) == 0 or len(pred) == 0:
         return np.empty((len(gt), len(pred)))
     inter = intersection(gt, pred)
     union = (gt[:, 2] * gt[:, 3])[:, None] + (pred[:, 2] * pred[:, 3])[None, :] - inter
-    iou = inter / np.maximum(union, 1e-9)
-    return np.where(iou >= iou_thr, 1 - iou, np.nan)
+    return inter / np.maximum(union, 1e-9)
 
 
 def ignored_overlap(boxes, regions):
@@ -44,22 +45,28 @@ def ignored_overlap(boxes, regions):
     return intersection(boxes, regions).max(axis=1) / area
 
 
-def accumulate(gt, pred, cls, iou_thr=0.5, ignore_thr=0.5):
-    """Build a MOTAccumulator for one sequence and one class."""
-    acc = mm.MOTAccumulator(auto_id=False)
+def frame_pairs(gt, pred, cls, ignore_thr=0.5):
+    """Per-frame (frame, gt_ids, pred_ids, iou) for one sequence and class, ignored regions removed."""
     regions = gt[gt[:, 7] == IGNORED]
     gt = gt[(gt[:, 7] == cls) & (gt[:, 6] > 0)]
     pred = pred[pred[:, 7] == cls]
 
-    frames = np.union1d(gt[:, 0], pred[:, 0]).astype(int)
-    for f in frames:
+    out = []
+    for f in np.union1d(gt[:, 0], pred[:, 0]).astype(int):
         g = gt[gt[:, 0] == f]
         p = pred[pred[:, 0] == f]
         r = regions[regions[:, 0] == f][:, 2:6]
         g = g[ignored_overlap(g[:, 2:6], r) <= ignore_thr]
         p = p[ignored_overlap(p[:, 2:6], r) <= ignore_thr]
-        dist = iou_distance(g[:, 2:6], p[:, 2:6], iou_thr)
-        acc.update(g[:, 1].astype(int), p[:, 1].astype(int), dist, frameid=f)
+        out.append((f, g[:, 1].astype(int), p[:, 1].astype(int), iou(g[:, 2:6], p[:, 2:6])))
+    return out
+
+
+def accumulate(pairs, iou_thr=0.5):
+    """Build a MOTAccumulator from frame_pairs output."""
+    acc = mm.MOTAccumulator(auto_id=False)
+    for f, g, p, s in pairs:
+        acc.update(g, p, np.where(s >= iou_thr, 1 - s, np.nan), frameid=f)
     return acc
 
 
@@ -78,12 +85,14 @@ def evaluate(gt_dir, pred_dir, classes=EVAL_CLASSES):
     mh = mm.metrics.create()
     rows = {}
     for cls in classes:
-        accs = [accumulate(gt, pred, cls) for gt, pred in data]
+        pairs = [frame_pairs(gt, pred, cls) for gt, pred in data]
+        accs = [accumulate(p) for p in pairs]
         summary = mh.compute_many(accs, metrics=METRICS, names=[f.stem for f in gt_files], generate_overall=True)
-        rows[CATEGORIES[cls]] = summary.loc["OVERALL"]
+        h = hota.combine([hota.sequence_stats([q[1:] for q in p]) for p in pairs])
+        rows[CATEGORIES[cls]] = pd.concat([pd.Series({k: h[k] for k in HOTA_METRICS}), summary.loc["OVERALL"]])
 
     table = pd.DataFrame(rows).T
-    rates = ["mota", "idf1", "idp", "idr", "precision", "recall"]
+    rates = HOTA_METRICS + ["mota", "idf1", "idp", "idr", "precision", "recall"]
     table.loc["mean"] = table.sum()  # counts are summed, rates averaged
     table.loc["mean", rates] = table.loc[list(rows), rates].mean()
     return table

@@ -7,7 +7,7 @@ Usage:
 import argparse
 from pathlib import Path
 
-from mot.eval.visdrone_eval import evaluate
+from mot.eval.visdrone_eval import HOTA_METRICS, evaluate
 
 
 def main():
@@ -17,7 +17,7 @@ def main():
     args = parser.parse_args()
 
     table = evaluate(args.gt, args.pred)
-    pct = ["mota", "idf1", "idp", "idr", "precision", "recall"]
+    pct = HOTA_METRICS + ["mota", "idf1", "idp", "idr", "precision", "recall"]
     shown = table.copy()
     shown[pct] = shown[pct] * 100
     print(shown.round(1).to_string())

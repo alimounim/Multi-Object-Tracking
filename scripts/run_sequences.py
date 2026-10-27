@@ -8,6 +8,8 @@ Usage:
     python scripts/run_sequences.py --split ... --tracker botsort.yaml --out outputs/val_botsort
 """
 import argparse
+import json
+import time
 from pathlib import Path
 
 import yaml
@@ -15,14 +17,15 @@ from tqdm import tqdm
 from ultralytics import YOLO
 
 from mot.datasets.visdrone import COCO_TO_VISDRONE, list_sequences
+from mot.utils.timing import STAGES, FrameTimer, time_tracker_updates
 
 
-def track_sequence(model, seq, det, tracker, class_map):
+def track_sequence(model, seq, det, tracker, class_map, timer):
     # persist=True: without it Ultralytics resets the tracker whenever the file path changes,
     # i.e. on every frame of an image folder. Reset explicitly between sequences instead.
     for t in getattr(model.predictor, "trackers", []):
         t.reset()
-    rows = []
+    rows, total_ms, detect_ms, track_ms = [], [], [], []
     results = model.track(
         source=str(seq.image_dir),
         tracker=tracker,
@@ -35,14 +38,21 @@ def track_sequence(model, seq, det, tracker, class_map):
         persist=True,
         verbose=False,
     )
-    for r in tqdm(results, total=len(seq), desc=seq.name, leave=False):
-        frame = int(Path(r.path).stem)
-        b = r.boxes
-        if b.id is None:
-            continue
-        for (x1, y1, x2, y2), tid, score, c in zip(b.xyxy.tolist(), b.id.int().tolist(), b.conf.tolist(), b.cls.int().tolist()):
-            cat = class_map.get(c, -1) if class_map else c
-            rows.append(f"{frame},{tid},{x1:.2f},{y1:.2f},{x2 - x1:.2f},{y2 - y1:.2f},{score:.4f},{cat},-1,-1")
+    with time_tracker_updates(track_ms):
+        prev = time.perf_counter()
+        for r in tqdm(results, total=len(seq), desc=seq.name, leave=False):
+            now = time.perf_counter()
+            total_ms.append((now - prev) * 1000)
+            prev = now
+            detect_ms.append(sum(r.speed.values()))
+            frame = int(Path(r.path).stem)
+            b = r.boxes
+            if b.id is None:
+                continue
+            for (x1, y1, x2, y2), tid, score, c in zip(b.xyxy.tolist(), b.id.int().tolist(), b.conf.tolist(), b.cls.int().tolist()):
+                cat = class_map.get(c, -1) if class_map else c
+                rows.append(f"{frame},{tid},{x1:.2f},{y1:.2f},{x2 - x1:.2f},{y2 - y1:.2f},{score:.4f},{cat},-1,-1")
+    timer.add_sequence(total_ms, detect_ms, track_ms)
     return rows
 
 
@@ -63,10 +73,18 @@ def main():
     out.mkdir(parents=True, exist_ok=True)
 
     model = YOLO(det["weights"])
+    timer = FrameTimer()
     for seq in tqdm(list_sequences(split), desc="sequences"):
-        rows = track_sequence(model, seq, det, tracker, class_map)
+        rows = track_sequence(model, seq, det, tracker, class_map, timer)
         (out / f"{seq.name}.txt").write_text("\n".join(rows) + ("\n" if rows else ""))
+
+    speed = {"weights": det["weights"], "imgsz": det["imgsz"], "tracker": tracker, **timer.summary()}
+    (out / "speed.json").write_text(json.dumps(speed, indent=2))
     print(f"Results written to {out}")
+    print(
+        f"{speed['fps']:.1f} FPS end-to-end ({speed['fps_model_only']:.1f} FPS detect+track) | per frame: "
+        + ", ".join(f"{s} {speed[f'{s}_ms']:.1f} ms" for s in STAGES)
+    )
 
 
 if __name__ == "__main__":
