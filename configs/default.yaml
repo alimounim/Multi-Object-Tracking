@@ -4,7 +4,7 @@ detector:
   iou: 0.7
   imgsz: 1280                  # VisDrone frames are ~1344x756 with small objects
   classes: null                # e.g. [0] for persons only
-  coco_classes: true           # map COCO class ids to VisDrone categories (stock weights)
+  class_map: coco              # detector class ids -> VisDrone: coco (stock weights) or visdrone (fine-tuned)
   device: 0                    # GPU index, or "cpu"
 
 dataset:

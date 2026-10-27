@@ -23,10 +23,15 @@ CATEGORIES = {
     11: "others",
 }
 IGNORED = 0
+OTHERS = 11
 EVAL_CLASSES = (1, 4, 5, 6, 9)  # pedestrian, car, van, truck, bus
+TRAIN_CLASSES = tuple(range(1, 11))  # categories a detector is trained on (YOLO index i -> category i + 1)
 
-# COCO class index -> VisDrone category, for detectors trained on COCO
-COCO_TO_VISDRONE = {0: 1, 1: 3, 2: 4, 3: 10, 5: 9, 7: 6}
+# Detector class index -> VisDrone category
+CLASS_MAPS = {
+    "coco": {0: 1, 1: 3, 2: 4, 3: 10, 5: 9, 7: 6},  # stock COCO weights
+    "visdrone": {i: c for i, c in enumerate(TRAIN_CLASSES)},  # weights fine-tuned on VisDrone
+}
 
 COLUMNS = ("frame", "id", "x", "y", "w", "h", "score", "category", "truncation", "occlusion")
 
@@ -41,6 +46,13 @@ def load_annotations(path):
         pad = np.full((len(data), len(COLUMNS) - data.shape[1]), -1.0)
         data = np.hstack([data, pad])
     return data[:, : len(COLUMNS)]
+
+
+def load_det_annotations(path):
+    """Load a VisDrone-DET annotation file (x, y, w, h, score, category, truncation, occlusion)
+    into the same (N, 10) layout as MOT annotations, with frame = 0 and id = -1."""
+    data = np.loadtxt(path, delimiter=",", ndmin=2, usecols=range(8)) if Path(path).stat().st_size else np.zeros((0, 8))
+    return np.hstack([np.zeros((len(data), 1)), np.full((len(data), 1), -1.0), data])
 
 
 @dataclass

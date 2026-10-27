@@ -16,7 +16,7 @@ import yaml
 from tqdm import tqdm
 from ultralytics import YOLO
 
-from mot.datasets.visdrone import COCO_TO_VISDRONE, list_sequences
+from mot.datasets.visdrone import CLASS_MAPS, list_sequences
 from mot.utils.timing import STAGES, FrameTimer, time_tracker_updates
 
 
@@ -32,7 +32,7 @@ def track_sequence(model, seq, det, tracker, class_map, timer):
         conf=det["conf"],
         iou=det["iou"],
         imgsz=det["imgsz"],
-        classes=sorted(class_map) if class_map else None,
+        classes=sorted(class_map),
         device=det["device"],
         stream=True,
         persist=True,
@@ -50,7 +50,7 @@ def track_sequence(model, seq, det, tracker, class_map, timer):
             if b.id is None:
                 continue
             for (x1, y1, x2, y2), tid, score, c in zip(b.xyxy.tolist(), b.id.int().tolist(), b.conf.tolist(), b.cls.int().tolist()):
-                cat = class_map.get(c, -1) if class_map else c
+                cat = class_map.get(c, -1)
                 rows.append(f"{frame},{tid},{x1:.2f},{y1:.2f},{x2 - x1:.2f},{y2 - y1:.2f},{score:.4f},{cat},-1,-1")
     timer.add_sequence(total_ms, detect_ms, track_ms)
     return rows
@@ -62,13 +62,17 @@ def main():
     parser.add_argument("--split", help="Overrides dataset.split in the config")
     parser.add_argument("--tracker", help="Overrides tracker.type in the config")
     parser.add_argument("--out", help="Output folder (default: outputs/<split>_<tracker>)")
+    parser.add_argument("--weights", help="Overrides detector.weights in the config")
+    parser.add_argument("--class-map", choices=sorted(CLASS_MAPS), help="Overrides detector.class_map")
     args = parser.parse_args()
 
     cfg = yaml.safe_load(Path(args.config).read_text())
     det = cfg["detector"]
+    det["weights"] = args.weights or det["weights"]
+    det["class_map"] = args.class_map or det["class_map"]
     tracker = args.tracker or cfg["tracker"]["type"]
     split = Path(args.split or cfg["dataset"]["split"])
-    class_map = COCO_TO_VISDRONE if det.get("coco_classes") else None
+    class_map = CLASS_MAPS[det["class_map"]]
     out = Path(args.out or Path(cfg["output"]["dir"]) / f"{split.name}_{Path(tracker).stem}")
     out.mkdir(parents=True, exist_ok=True)
 
