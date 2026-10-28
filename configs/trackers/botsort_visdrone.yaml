@@ -1,0 +1,15 @@
+# BoT-SORT with camera-motion compensation: the final system. Thresholds tuned on VisDrone2019-MOT val
+# (scripts/tune_tracker.py) for YOLO26n fine-tuned on MOT + DET train. Run with --gmc-width 480 so
+# compensation runs on frames at most 480 px wide (same accuracy as Ultralytics' 2x downscale, much faster on 4K).
+tracker_type: botsort
+track_high_thresh: 0.45
+track_low_thresh: 0.1
+new_track_thresh: 0.65
+track_buffer: 30
+match_thresh: 0.9
+fuse_score: True
+gmc_method: sparseOptFlow
+proximity_thresh: 0.5
+appearance_thresh: 0.8
+with_reid: False
+model: auto

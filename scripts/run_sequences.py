@@ -6,6 +6,7 @@ Writes one VisDrone-format result file per sequence:
 Usage:
     python scripts/run_sequences.py --split data/raw/VisDrone/VisDrone2019-MOT-val
     python scripts/run_sequences.py --split ... --tracker botsort.yaml --out outputs/val_botsort
+    python scripts/run_sequences.py --split ... --tracker botsort.yaml --gmc-width 640  # cheaper camera-motion compensation
 """
 import argparse
 import json
@@ -17,6 +18,7 @@ from tqdm import tqdm
 from ultralytics import YOLO
 
 from mot.datasets.visdrone import CLASS_MAPS, list_sequences
+from mot.trackers.gmc import fixed_width_gmc
 from mot.utils.timing import STAGES, FrameTimer, time_tracker_updates
 
 
@@ -64,6 +66,8 @@ def main():
     parser.add_argument("--out", help="Output folder (default: outputs/<split>_<tracker>)")
     parser.add_argument("--weights", help="Overrides detector.weights in the config")
     parser.add_argument("--class-map", choices=sorted(CLASS_MAPS), help="Overrides detector.class_map")
+    parser.add_argument("--gmc-width", type=int, help="Run camera-motion compensation on frames at most this wide "
+                        "(default: Ultralytics' fixed 2x downscale)")
     args = parser.parse_args()
 
     cfg = yaml.safe_load(Path(args.config).read_text())
@@ -78,11 +82,13 @@ def main():
 
     model = YOLO(det["weights"])
     timer = FrameTimer()
-    for seq in tqdm(list_sequences(split), desc="sequences"):
-        rows = track_sequence(model, seq, det, tracker, class_map, timer)
-        (out / f"{seq.name}.txt").write_text("\n".join(rows) + ("\n" if rows else ""))
+    with fixed_width_gmc(args.gmc_width):
+        for seq in tqdm(list_sequences(split), desc="sequences"):
+            rows = track_sequence(model, seq, det, tracker, class_map, timer)
+            (out / f"{seq.name}.txt").write_text("\n".join(rows) + ("\n" if rows else ""))
 
-    speed = {"weights": det["weights"], "imgsz": det["imgsz"], "tracker": tracker, **timer.summary()}
+    speed = {"weights": det["weights"], "imgsz": det["imgsz"], "tracker": tracker, "gmc_width": args.gmc_width,
+             **timer.summary()}
     (out / "speed.json").write_text(json.dumps(speed, indent=2))
     print(f"Results written to {out}")
     print(
