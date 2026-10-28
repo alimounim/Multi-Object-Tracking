@@ -73,7 +73,9 @@ def accumulate(pairs, iou_thr=0.5):
 def evaluate(gt_dir, pred_dir, classes=EVAL_CLASSES):
     """Evaluate every sequence in gt_dir against same-named result files in pred_dir.
 
-    Returns a DataFrame with one row per class plus a 'mean' row (the official score).
+    Returns a DataFrame with one row per class, a 'mean' row (rates averaged over classes, counts
+    summed) and an 'all' row that pools the counts of every class and sequence before computing the
+    rates, as the official VisDrone MOT toolkit (evaluateBenchmark.m) does for MOTA and IDF1.
     Sequences with no result file are scored as empty predictions.
     """
     gt_dir, pred_dir = Path(gt_dir), Path(pred_dir)
@@ -83,16 +85,25 @@ def evaluate(gt_dir, pred_dir, classes=EVAL_CLASSES):
 
     data = [(load_annotations(f), load_annotations(pred_dir / f.name)) for f in gt_files]
     mh = mm.metrics.create()
-    rows = {}
+    names = [f.stem for f in gt_files]
+    rows, all_accs, all_stats = {}, [], []
+
+    def row(accs, stats, names):
+        summary = mh.compute_many(accs, metrics=METRICS, names=names, generate_overall=True)
+        h = hota.combine(stats)
+        return pd.concat([pd.Series({k: h[k] for k in HOTA_METRICS}), summary.loc["OVERALL"]])
+
     for cls in classes:
         pairs = [frame_pairs(gt, pred, cls) for gt, pred in data]
         accs = [accumulate(p) for p in pairs]
-        summary = mh.compute_many(accs, metrics=METRICS, names=[f.stem for f in gt_files], generate_overall=True)
-        h = hota.combine([hota.sequence_stats([q[1:] for q in p]) for p in pairs])
-        rows[CATEGORIES[cls]] = pd.concat([pd.Series({k: h[k] for k in HOTA_METRICS}), summary.loc["OVERALL"]])
+        stats = [hota.sequence_stats([q[1:] for q in p]) for p in pairs]
+        rows[CATEGORIES[cls]] = row(accs, stats, names)
+        all_accs += accs
+        all_stats += stats
 
     table = pd.DataFrame(rows).T
     rates = HOTA_METRICS + ["mota", "idf1", "idp", "idr", "precision", "recall"]
     table.loc["mean"] = table.sum()  # counts are summed, rates averaged
     table.loc["mean", rates] = table.loc[list(rows), rates].mean()
+    table.loc["all"] = row(all_accs, all_stats, [f"{c}_{n}" for c in classes for n in names])
     return table

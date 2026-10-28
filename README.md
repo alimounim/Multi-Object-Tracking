@@ -33,7 +33,9 @@ python scripts/evaluate.py --gt data/raw/VisDrone/VisDrone2019-MOT-val/annotatio
 ```
 
 Evaluation follows the official protocol: per class (pedestrian, car, van, truck, bus), IoU ≥ 0.5,
-boxes inside ignored regions dropped, `mean` row = class average. HOTA is computed with a
+boxes inside ignored regions dropped, `mean` row = class average, `all` row = counts pooled over all classes and sequences
+before computing the rates, as the official MATLAB toolkit does for MOTA and IDF1 (use `all` when comparing
+with published VisDrone results; on test-dev our evaluator counts the same 229,759 ground-truth boxes). HOTA is computed with a
 re-implementation of the TrackEval algorithm (`src/mot/eval/hota.py`).
 
 `run_sequences.py` also writes `speed.json`: per-frame time for detection (pre/inference/post),

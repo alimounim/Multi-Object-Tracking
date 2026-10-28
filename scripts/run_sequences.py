@@ -66,6 +66,7 @@ def main():
     parser.add_argument("--out", help="Output folder (default: outputs/<split>_<tracker>)")
     parser.add_argument("--weights", help="Overrides detector.weights in the config")
     parser.add_argument("--class-map", choices=sorted(CLASS_MAPS), help="Overrides detector.class_map")
+    parser.add_argument("--imgsz", type=int, help="Overrides detector.imgsz")
     parser.add_argument("--gmc-width", type=int, help="Run camera-motion compensation on frames at most this wide "
                         "(default: Ultralytics' fixed 2x downscale)")
     args = parser.parse_args()
@@ -74,6 +75,7 @@ def main():
     det = cfg["detector"]
     det["weights"] = args.weights or det["weights"]
     det["class_map"] = args.class_map or det["class_map"]
+    det["imgsz"] = args.imgsz or det["imgsz"]
     tracker = args.tracker or cfg["tracker"]["type"]
     split = Path(args.split or cfg["dataset"]["split"])
     class_map = CLASS_MAPS[det["class_map"]]

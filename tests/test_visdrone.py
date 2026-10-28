@@ -73,6 +73,18 @@ def test_id_switch_and_ignored_region(dirs):
     assert ped["num_false_positives"] == 0
 
 
+def test_all_row_pools_counts_over_classes(dirs):
+    gt, pred = dirs
+    peds = [l for l in GT.splitlines() if not l.endswith(",0,0,0,0")]
+    write(gt / "seq.txt", GT + "1,3,100,100,20,20,1,4,0,0\n2,3,101,100,20,20,1,4,0,0\n")  # 2 car boxes, missed
+    write(pred / "seq.txt", "\n".join(peds) + "\n")
+    table = evaluate(gt, pred)
+    assert table.loc["pedestrian", "mota"] == 1.0 and table.loc["car", "mota"] == 0.0
+    assert table.loc["mean", "mota"] == pytest.approx(0.5)  # average of the two classes with ground truth
+    assert table.loc["all", "mota"] == pytest.approx(0.75)  # 1 - 2 misses / 8 boxes
+    assert table.loc["all", "num_misses"] == 2
+
+
 def test_missing_prediction_file(dirs):
     gt, pred = dirs
     ped = evaluate(gt, pred).loc["pedestrian"]
